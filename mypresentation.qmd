@@ -1,0 +1,166 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+1 + 1
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+
+library(readr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(plotly)
+library(rmarkdown)
+library(tidyverse)
+library(ggfortify)
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
+
+```{r}
+
+files <- sort(list.files(path = "DATA", pattern = "uitslag.csv", full.names = TRUE))
+
+legi <- lapply(files, read_csv2())
+
+names(legi) <- c(2021,2023,2025)
+
+```
+
+```{r}
+
+legi[["2025"]]
+
+```
+
+```{r}
+
+legi[3] <- lapply(legi[3], function(x) x %>% filter(str_detect(RegioCode, "G")))
+legi[3] <- lapply(legi[3], function(x) x %>% filter(str_detect(VeldType, "LijstAantalStemmen")))
+
+legi[2] <- lapply(legi[2], function(x) x %>% filter(str_detect(RegioCode, "G")))
+legi[2] <- lapply(legi[2], function(x) x %>% filter(str_detect(VeldType, "LijstAantalStemmen")))
+
+```
+
+```{r}
+fix_nuenen <- function(x) {
+  x <- x |> mutate(across(everything(), as.character))
+  
+  nuenen_rows <- x[[1]] == "Nuenen"
+  x[nuenen_rows, 2:(ncol(x) - 1)] <- x[nuenen_rows, 3:ncol(x)]
+  x[nuenen_rows, ncol(x)] <- NA
+  
+  x |> type.convert(as.is = TRUE)
+}
+
+legi[3] <- lapply(legi[3], fix_nuenen)
+legi[3][[1]] <- legi[3][[1]] |> select(where(~!all(is.na(.) | . == "")))
+
+legi[2] <- lapply(legi[2], fix_nuenen)
+legi[2][[1]] <- legi[2][[1]] |> select(where(~!all(is.na(.) | . == "")))
+
+```
+
+\
+
+```{r}
+legi[3][[1]] <- legi[3][[1]] |> select(-contains("OuderRegioCode"), -contains("GrootOuderRegioCode"),-contains("LijstNummer"),-contains("VeldType"))
+legi[2][[1]] <- legi[2][[1]] |> select(-contains("OuderRegioCode"), -contains("GrootOuderRegioCode"),-contains("LijstNummer"),-contains("VeldType"))
+```
+
+```{r}
+colnames(legi[3][[1]]) <- c("Municipalité","Code","Liste","Votes")
+colnames(legi[2][[1]]) <- c("Municipalité","Code","Liste","Votes")
+legi[2][[1]]
+```
+
+```{r}
+fix_nuenen2 <- function(x) {
+  x <- x |> mutate(across(everything(), as.character))
+  
+  nuenen_rows <- x[[2]] == "Nuenen"
+  x[nuenen_rows, 3:(ncol(x) - 1)] <- x[nuenen_rows, 4:ncol(x)]
+  x[nuenen_rows, ncol(x)] <- NA
+  
+  x |> type.convert(as.is = TRUE)
+}
+legi[1] <- lapply(legi[1], fix_nuenen2)
+```
+
+```{r}
+test <- lapply(legi[1], function(x) x %>% filter(str_detect(GemeenteNaam, "Nuenen")))
+test
+legi[2][[1]] <- legi[2][[1]] |> mutate(Code = as.integer(str_remove(Code, "^G0*")))
+legi[3][[1]] <- legi[3][[1]] |> mutate(Code = as.integer(str_remove(Code, "^G0*")))
+legi[3][[1]]
+```
+
+```{r}
+legi[1][[1]] <- legi[1][[1]] |> relocate(GemeenteNaam, .before = GemeenteCode)
+colnames(legi[1][[1]]) <- c("Municipalité","Code","Liste","Votes")
+
+```
+
+```{r}
+legi <-append(legi,"DATA/PS2023_Stemmen_Per_Lijst_Per_Gemeente.csv")
+legi[[4]]<-read_csv2("DATA/PS2023_Stemmen_Per_Lijst_Per_Gemeente.csv")
+names(legi) <- c("2021","2023","2025","loc2023")
+
+legi[4][[1]]
+```
+
+```{r}
+legi[4][[1]] <- legi[4][[1]] |> relocate(GemeenteNaam, .before = GemeenteCode)
+colnames(legi[4][[1]]) <- c("Municipalité","Code","Liste","Votes")
+legi[3]
+```
+
+```{r}
+t2025 <- legi[3][[1]] |>
+  group_by(Municipalité) |>
+  mutate(Votes = 100*Votes / sum(Votes)) |>
+  ungroup()
+
+
+```
+
+```{r}
+
+
+pca_data <- t2025 |>
+  filter(str_detect(Liste, "D66|PVV|CDA|PvdA|JA21")) |>
+  pivot_wider(
+    id_cols = Municipalité,
+    names_from = Liste,
+    values_from = Votes
+  )
+
+
+pca_result <- pca_data |>
+  select(-Municipalité) |>
+  prcomp(scale. = TRUE)
+
+
+summary(pca_result)
+
+
+autoplot(pca_result, data = pca_data, loadings = TRUE, loadings.label = TRUE)
+summary(pca_result)
+```
