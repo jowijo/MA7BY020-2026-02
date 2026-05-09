@@ -13,7 +13,11 @@ Quarto enables you to weave together content and executable code into a finished
 When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
 
 ```{r}
-1 + 1
+install.packages("cbsodataR")
+install.packages("sf")
+install.packages("CCA")
+install.packages("factoextra")
+install.packages("cbsodataR")
 ```
 
 You can add options to executable code like this
@@ -29,6 +33,11 @@ library(plotly)
 library(rmarkdown)
 library(tidyverse)
 library(ggfortify)
+library(sf)
+library(patchwork)
+library(CCA)
+library(factoextra)
+library(cbsodataR)
 ```
 
 The `echo: false` option disables the printing of code (only output is displayed).
@@ -37,7 +46,7 @@ The `echo: false` option disables the printing of code (only output is displayed
 
 files <- sort(list.files(path = "DATA", pattern = "uitslag.csv", full.names = TRUE))
 
-legi <- lapply(files, read_csv2())
+legi <- lapply(files, read_csv2)
 
 names(legi) <- c(2021,2023,2025)
 
@@ -135,7 +144,13 @@ legi[3]
 ```{r}
 t2025 <- legi[3][[1]] |>
   group_by(Municipalité) |>
-  mutate(Votes = 100*Votes / sum(Votes)) |>
+  mutate(Votes = Votes / sum(Votes)) |>
+  ungroup()
+
+
+t2023 <- legi[2][[1]] |>
+  group_by(Municipalité) |>
+  mutate(Votes = Votes / sum(Votes)) |>
   ungroup()
 
 
@@ -144,8 +159,8 @@ t2025 <- legi[3][[1]] |>
 ```{r}
 
 
-pca_data <- t2025 |>
-  filter(str_detect(Liste, "D66|PVV|CDA|PvdA|JA21")) |>
+pca_data2025 <- t2025 |>
+  filter(str_detect(Liste, "VVD|GROENLINKS|PVV|BBB|D66")) |>
   pivot_wider(
     id_cols = Municipalité,
     names_from = Liste,
@@ -163,4 +178,425 @@ summary(pca_result)
 
 autoplot(pca_result, data = pca_data, loadings = TRUE, loadings.label = TRUE)
 summary(pca_result)
+```
+
+```{r}
+pca_data <- t2023 |>
+  filter(str_detect(Liste, "VVD|GROENLINKS|PVV|BBB|D66")) |>
+  pivot_wider(
+    id_cols = Municipalité,
+    names_from = Liste,
+    values_from = Votes
+  )
+
+
+pca_result <- pca_data |>
+  select(-Municipalité) |>
+  prcomp(scale. = TRUE)
+
+
+summary(pca_result)
+
+
+autoplot(pca_result, data = pca_data, loadings = TRUE, loadings.label = TRUE)
+summary(pca_result)
+```
+
+```{r}
+r2023 <- legi[4][[1]] |>
+  group_by(Municipalité) |>
+  mutate(Votes = 100*Votes / sum(Votes)) |>
+  ungroup()
+
+```
+
+```{r}
+r2023
+```
+
+```{r}
+r2023bis <- r2023 |>
+  mutate(Liste = case_when(
+    str_detect(Liste, "GROENLINKS|Partij van de Arbeid (P.v.d.A.)") ~ "Partij van de Arbeid (P.v.d.A.) / GROENLINKS",
+    TRUE ~ Liste
+  )) |>
+  group_by(Municipalité, Liste) |>
+  summarise(Votes = sum(Votes), .groups = "drop")
+
+
+
+
+pca_data <- r2023bis |>
+  filter(str_detect(Liste, "GROENLINKS|VVD|PVV|BBB")) |>
+  pivot_wider(
+    id_cols = Municipalité,
+    names_from = Liste,
+    values_from = Votes
+  )
+
+
+pca_result <- pca_data |>
+  select(-Municipalité) |>
+  prcomp(scale. = TRUE)
+
+
+summary(pca_result)
+
+
+autoplot(pca_result, data = pca_data, loadings = TRUE, loadings.label = TRUE)
+summary(pca_result)
+```
+
+```{r}
+
+
+gemeenten <- st_read("https://service.pdok.nl/cbs/gebiedsindelingen/2025/wfs/v1_0?request=GetFeature&service=WFS&version=2.0.0&typeName=gemeente_gegeneraliseerd&outputFormat=application/json")
+gemeenten <- gemeenten |> mutate(statcode = as.integer(str_remove(statcode, "^GM0*")))
+
+
+
+
+```
+
+```{r}
+
+vote_vvd_2025 <- t2025 |>
+  filter(str_detect(Liste, "VVD")) |>
+  dplyr::select(Code,Municipalité,Votes
+  )
+
+
+
+```
+
+```{r}
+map_vvd_2025 <- gemeenten |>
+  left_join(vote_vvd_2025, by = c("statcode" = "Code"))
+```
+
+```{r}
+ggplot(map_vvd_2025) +
+  geom_sf(aes(fill = Votes), color = "white", linewidth = 0.1) +
+  scale_fill_viridis_c(labels = scales::percent) +
+  theme_void() +
+  labs(title = "Vote VVD par municipalité", fill = "Pourcentage")
+```
+
+```{r}
+
+plot_party <- function(party_pattern, party_label) {
+  vote_data <- t2025 |>
+    filter(str_detect(Liste, party_pattern)) |>
+    dplyr::select(Code, Municipalité, Votes)
+  
+  map_data <- gemeenten |>
+    left_join(vote_data, by = c("statcode" = "Code"))
+  
+  ggplot(map_data) +
+    geom_sf(aes(fill = Votes), color = "white", linewidth = 0.1) +
+    scale_fill_viridis_c(labels = scales::percent) +
+    theme_void() +
+    labs(title = paste("Vote", party_label, "par municipalité"), fill = "Pourcentage")
+}
+
+
+parties <- c("VVD" = "VVD", "PVV" = "PVV", "D66" = "D66", "GL-PvdA" = "GROENLINKS","SGP"="SGP")
+
+
+plots <- imap(parties, ~plot_party(.x, .y))
+
+
+library(patchwork)
+wrap_plots(plots)
+
+
+plots$"PVV"
+
+
+
+
+
+```
+
+```{r}
+
+
+
+# 1. Build wide vote share matrices per election, one row per municipality
+# Make sure municipalities are aligned — join on Code
+
+
+
+party_patterns <- c("VVD", "PVV", "D66", "GROENLINKS", "CDA", "JA21", "SGP",
+                    "SP", "PvdD", "FvD", "BBB", "CU", "Volt", "DENK")
+
+filter_parties <- function(df, patterns) {
+  df |>
+    filter(Reduce(`|`, lapply(patterns, function(p) str_detect(Liste, p)))) |>
+    mutate(Liste = case_when(
+      str_detect(Liste, "VVD") ~ "VVD",
+    str_detect(Liste, "PVV") ~ "PVV",
+    str_detect(Liste, "D66") ~ "D66",
+    str_detect(Liste, "GROENLINKS") ~ "GL-PvdA",
+    str_detect(Liste, "CDA") ~ "CDA",
+    str_detect(Liste, "JA21") ~ "JA21",
+    str_detect(Liste, "SGP") ~ "SGP",
+    str_detect(Liste, "SP") ~ "SP",
+    str_detect(Liste, "Partij voor de Dieren") ~ "PvdD",
+    str_detect(Liste, "Forum") ~ "FvD",
+    str_detect(Liste, "BBB") ~ "BBB",
+    str_detect(Liste, "ChristenUnie") ~ "CU",
+    str_detect(Liste, "Volt") ~ "Volt",
+    str_detect(Liste, "DENK") ~ "DENK"
+    ))
+}
+
+X_tmp <- t2023 |>
+  filter_parties(party_patterns) |>
+  pivot_wider(id_cols = Code, names_from = Liste, values_from = Votes) |>
+  column_to_rownames("Code") |>
+  as.matrix()
+
+Y_tmp <- t2025 |>
+  filter_parties(party_patterns) |>
+  pivot_wider(id_cols = Code, names_from = Liste, values_from = Votes) |>
+  column_to_rownames("Code") |>
+  as.matrix()
+
+
+common_codes <- intersect(rownames(X_tmp), rownames(Y_tmp))
+common_parties <- intersect(colnames(X_tmp), colnames(Y_tmp))
+
+X <- X_tmp[common_codes, common_parties]
+Y <- Y_tmp[common_codes, common_parties]
+
+X[is.na(X)] <- 0
+Y[is.na(Y)] <- 0
+
+result <- cc(X, Y)
+
+
+
+# 4. Run CCA
+result <- cc(X, Y)
+
+# 5. Inspect correlations between canonical variates
+result$cor
+
+# 6. Plot
+plt.cc(result, type = "v",var.label = TRUE)
+```
+
+```{r}
+
+# Check the canonical correlations first
+result$cor
+
+# Check the canonical correlations first
+result$cor
+
+# See which parties load on each dimension
+result$xcoef  # 2023 loadings
+result$ycoef  # 2025 loadings
+```
+
+```{r}
+# Check the canonical correlations first
+result$cor
+
+# See which parties load on each dimension
+result$xcoef  # 2023 loadings
+result$ycoef  # 2025 loadings
+```
+
+```{r}
+# Labelled plot
+plt.cc(result, type = "v", var.label = TRUE)
+
+# Check how much variance each canonical variate explains
+result$cor^2
+```
+
+```{r}
+
+result$cor^2
+
+```
+
+```{r}
+# 1. Direct party-by-party correlation between elections
+cor_matrix <- cor(X, Y)
+print(cor_matrix)
+
+# How strongly does each party's 2023 geography predict its 2025 geography?
+diag(cor_matrix)
+
+# 2. Or just scatter plots per party
+par(mfrow = c(3, 4))
+for (party in colnames(X)) {
+  if (party %in% colnames(Y)) {
+    plot(X[, party], Y[, party],
+         xlab = paste(party, "2023"),
+         ylab = paste(party, "2025"),
+         main = party)
+    abline(lm(Y[, party] ~ X[, party]), col = "red")
+  }
+}
+```
+
+```{r}
+common_parties <- intersect(colnames(X), colnames(Y))
+diag(cor(X[, common_parties], Y[, common_parties]))
+```
+
+```{r}
+result$cor^2
+diag(cor(X, Y))
+```
+
+```{r}
+fviz_nbclust(X, kmeans, method = "wss")
+```
+
+```{r}
+
+
+
+
+# 2. Run k-means (replace k with your chosen number)
+set.seed(42)
+km2023 <- kmeans(X, centers = 5, nstart = 25)
+
+# 3. Visualise clusters on PCA plot
+fviz_cluster(km, data = X, ellipse.type = "norm") +
+  theme_void()
+
+# 4. Add cluster membership to a dataframe for mapping
+cluster_df <- data.frame(
+  Code = rownames(X),
+  cluster = km2023$cluster
+)
+
+# 5. Map the clusters
+map_data <- gemeenten |>
+  mutate(statcode = as.character(statcode)) |>
+  left_join(cluster_df, by = c("statcode" = "Code"))
+
+ggplot(map_data) +
+  geom_sf(aes(fill = factor(cluster)), color = "white", linewidth = 0.1) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  labs(title = "Clusters municipaux, législatives 2023", fill = "Cluster")
+```
+
+```{r}
+
+
+set.seed(42)
+km2025 <- kmeans(Y, centers = 5, nstart = 25)
+
+# 3. Visualise clusters on PCA plot
+fviz_cluster(km, data = Y, ellipse.type = "norm") +
+  theme_void()
+
+km2025$cluster <- dplyr::recode(km2025$cluster,
+  `2` = 4L,
+  `4` = 5L,
+  `5` = 2L
+)
+
+
+
+
+
+# 4. Add cluster membership to a dataframe for mapping
+cluster_df <- data.frame(
+  Code = rownames(Y),
+  cluster = km2025$cluster
+)
+
+
+
+
+
+
+# 5. Map the clusters
+map_data <- gemeenten |>
+  mutate(statcode = as.character(statcode)) |>
+  left_join(cluster_df, by = c("statcode" = "Code"))
+
+ggplot(map_data) +
+  geom_sf(aes(fill = factor(cluster)), color = "white", linewidth = 0.1) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  labs(title = "Clusters municipaux, législatives 2025", fill = "Cluster")
+
+```
+
+```{r}
+# Run k-means on both
+set.seed(42)
+km5_2023 <- kmeans(X, centers = 5, nstart = 25)
+set.seed(42)
+km5_2025 <- kmeans(Y, centers = 5, nstart = 25)
+km5_2025$cluster <- dplyr::recode(km5_2025$cluster,
+  `2` = 4L,
+  `4` = 5L,
+  `5` = 2L
+)
+
+
+
+
+
+# Compare cluster centers
+km5_2023$centers
+km5_2025$centers
+
+# See how municipalities moved between clusters
+table(km5_2023$cluster, km5_2025$cluster)
+```
+
+```{r}
+cluster_df <- data.frame(
+  Code = rownames(X),
+  cluster_2023 = km5_2023$cluster,
+  cluster_2025 = km5_2025$cluster
+) |>
+  mutate(switched = cluster_2023 != cluster_2025)
+
+# Which municipalities switched?
+cluster_df |> filter(switched) |> arrange(cluster_2023, cluster_2025)
+```
+
+```{r}
+cluster_df <- data.frame(
+  Code = rownames(X),
+  cluster_2023 = km5_2023$cluster,
+  cluster_2025 = km5_2025$cluster
+) |>
+  mutate(switched = cluster_2023 != cluster_2025)
+
+```
+
+```{r}
+cluster_df |>
+  filter(switched) |>
+  mutate(Code = as.integer(Code)) |>
+  left_join(
+    gemeenten |> st_drop_geometry() |> dplyr::select(statcode, statnaam),
+    by = c("Code" = "statcode")
+  ) |>
+  arrange(cluster_2023, cluster_2025)
+```
+
+```{r}
+
+gemeenten2 <- st_read("https://service.pdok.nl/cbs/wijkenbuurten/2023/wfs/v1_0?service=WFS&version=2.0.0&request=GetFeature&typeName=wijkenbuurten:gemeenten&outputFormat=application/json")
+
+```
+
+```{r}
+names(gemeenten2)
+
 ```
