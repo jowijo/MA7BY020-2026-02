@@ -301,6 +301,22 @@ summary(pca_result2025)
 
 ```
 
+Quelques remarques :
+
+-   Les deux premières composantes ne sont pas très significatives (environ 30-35% et 15-20% pour chaque ACP)
+
+-   Pour les législatives, on peut globalement tracer une droite entre les partis "de gauche" (SP,DENK,D66,GL,PvdA) et les partis "de droite" (CDA,NSC,VVD,SGP,JA21,PVV), cette droite n'est pas alignée avec les axes
+
+-   Les deux partis de gauche ayant ultérieurement fusionné (GL et PvdA) ne sont pas alignés géographiquement en 2021
+
+-   En 2021 : on pourrait conjecturer que l'axe des abscisses correspond grossièrement à un axe gauche droite, celui des ordonnées à un axe "élitiste" (VVD, D66 vers le bas) VS "populiste" (SP, PVV vers le haut)
+
+-   Les provinciales de 2023 sont assez peu lisibles, le VVD est à l'opposé des autres partis de droite, les votes se font possiblement sur d'autres critères que celui des législatives
+
+-   En 2023 : moins clair qu'en 2021, les partis "de droite" occupent le coin inférieur gauche, mais le PVV et le VVD sont opposés
+
+-   En 2025 : à l'exception du VVD, il y a une plus nette distinction entre les partis "de gauche" et ceux "de droite" que les années précédentes. Le VVD est géographiquement distribué de manière assez distincte.
+
 ## Analyse canonique des corrélations, 2023 VS 2025
 
 ```{r}
@@ -370,6 +386,10 @@ plt.cc(result, type = "v",var.label = TRUE)
 title("ACC : 2023 (rouge) VS 2025 (bleu)")
 ```
 
+Certains partis d'ont pas subi trop de réalignement géographique : le SGP, DENK, GL-PvdA, D66, BBB C'est assez attendu dans le cas du SGP et de DENK, qui sont des petits partis aux électorats assez captifs.
+
+D'autres partis ont été davantage réalignés : c'est en particulier le cas de JA21, qui a réalisé une percée en 2025 en "volant" des votes au PVV, ce qui pourrait expliquer son rapprochement.
+
 ## Régression linéaire
 
 ### Par parti, 2023 VS 2025
@@ -395,6 +415,10 @@ plots <- lapply(party_list, function(party) {
 wrap_plots(plots, ncol = 4)
 
 ```
+
+Les performances de certains partis en 2025 sont très bien prédites par celles de 2023 : c'est, comme on l'a vu précédemment, le cas de DENK et du SGP (R² de 1 !!!). Les partis pour lesquels c'est moins le cas sont ceux qui ont des résultats très différents de l'élection précédente : CDA (retour en force après la perte de la quasi-totalité de ses sièges en 2023), JA21 (percée significative), SP (contre-performance).
+
+Malgré une augmentation significative du score de D66 en 2025, l'on remarque que son score est bien prédit par celui de 2023 : ce n'est pas un réalignement géographique, le parti a juste augmenté ses marges là où il faisait déjà ses meilleurs scores.
 
 ### Analyse : Fusion GL-PvdA, 2021 VS 2023
 
@@ -465,6 +489,14 @@ ggplot(reg_data2025, aes(x = gl_pvda_2021, y = gl_pvda_2025)) +
 
 
 ```
+
+Plusieurs remarques :
+
+-   Les R² ne sont pas très élevés (0,27 et 0,36), ça témoigne d'un possible réalignement géographique
+
+-   Pentes de 1,45 et 1,3 : les partis ont à deux reprises amélioré leurs scores cumulés
+
+-   Erreurs résiduelles standard égales à 0,05 et 0,03 : les deux partis ont attiré de nouveaux électeurs par rapport à avant la fusion.
 
 ### Analyse : CDA et NSC, 2021-2023 et 2023-2025
 
@@ -540,6 +572,14 @@ summary(model_full)
 
 p1 + p2
 ```
+
+Plusieurs choses :
+
+-   Pour la régression 2021-\>2023, on a un R² de 0,54 (presque décent), donc une relation géographique relativement bonne, avec une pente de 0,71 : le NSC n'a pas donc su prendre tous les électeurs CDA de 2021
+
+-   Régression 2023-\>2025 : R² de 0,35 (moins bon), pente de 0,51 : le CDA n'a pas exactement repris tous les électeurs NSC.
+
+-   Régression prenant en compte 2021 ET 2023 : R² de 0,78 (meilleur que les autres) les scores du CDA en 2021 et du NSC en 2023 expliquent bien ceux du CDA en 2025. Curiosité : le coefficient pour le NSC en 2023 est négatif (-0,11) : on pourrait l'expliquer par le fait que des nouveaux électeurs NSC en 2023 ne sont pas partis vers le CDA en 2025.
 
 ## k-means
 
@@ -808,6 +848,8 @@ socio2 <- socio |>
 
 Nous nous sommes inspirés d'une récente visualitation des résultats des dernières élections locales au Royaume-Uni produite par The Economist.
 
+L'algorithme utilisé est un algorithme de k-nearest neighbors : on regroupe les municipalités en groupes de k, d'après une distance correspondant aux grandeurs des deux axes (diplôme et revenu), et on assigne à chaque groupe le parti arrivé dans tête dans la majorité de ce groupe.
+
 ```{r}
 
 
@@ -953,6 +995,10 @@ ggplot() +
   theme(legend.position = "bottom")
 ```
 
+En 2023, c'est essentiellement une division entre les municipalités aux revenus élevés qui votent VVD et celles aux revenus moins élevés qui votent PVV, avec GL-PvdA en tête à revenu moyen et niveau éducatif élevé.
+
+On observe un réalignement en 2025 : D66 domine à revenu moyen et niveau de diplôme élevé, et à revenu élevé mais pas trop non plus.
+
 ### ACP, Partie 2
 
 ```{r}
@@ -990,3 +1036,5 @@ fviz_pca_biplot(pca_result_socio2,
   theme_minimal()
 
 ```
+
+L'ajout de ces facteurs socio-économiques améliore un peu la significativité des deux premières composantes, les alignements entre les facteurs socio-économiques présents et les performances des partis sont globalement attendus.
